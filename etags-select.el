@@ -286,9 +286,14 @@ to do."
 
 (defun etags-select-find (tagname)
   "Core tag finding function."
+  (etags-select-push-tag-mark)
   (let ((tag-files (etags-select-get-tag-files))
         (tag-count 0))
     (setq etags-select-source-buffer (buffer-name))
+    ;; killing the buffer to avoid stale tag marks that are already in the ring
+    (let ((select-buffer (get-buffer etags-select-buffer-name)))
+      (when select-buffer
+        (kill-buffer etags-select-buffer-name)))
     (get-buffer-create etags-select-buffer-name)
     (set-buffer etags-select-buffer-name)
     (setq buffer-read-only nil)
@@ -299,12 +304,19 @@ to do."
             tag-files)
     (cond ((= tag-count 0)
            (message (concat "No matches for tag \"" tagname "\""))
+           (pop-tag-mark)
            (ding))
           ((and (= tag-count 1) etags-select-no-select-for-one-match)
            (set-buffer etags-select-buffer-name)
            (goto-char (point-min))
+
+           ;; since selection buffer does not get killed nowadays we need it
+           ;; to look attractive for the user
+           (setq buffer-read-only t)
+           (etags-select-mode tagname)
+
            (etags-select-next-tag)
-           (etags-select-goto-tag))
+           (etags-select-do-goto-tag))
           (t
            (set-buffer etags-select-buffer-name)
            (goto-char (point-min))
@@ -314,7 +326,7 @@ to do."
            (switch-to-buffer etags-select-buffer-name)
            (etags-select-mode tagname)))))
 
-(defun etags-select-goto-tag (&optional other-window)
+(defun etags-select-do-goto-tag (&optional other-window)
   "Goto the file/line of the tag under the cursor. Do not push tag mark."
   (let ((case-fold-search (etags-select-case-fold-search))
         tagname tag-point text-to-search-for filename filename-point (search-count 1))
@@ -338,9 +350,6 @@ to do."
         (setq search-count (1+ search-count)))
       (goto-char tag-point)
       (switch-to-buffer etags-select-source-buffer)
-      (if etags-select-use-xemacs-etags-p
-          (push-tag-mark)
-        (ring-insert find-tag-marker-ring (point-marker)))
       (if other-window
           (find-file-other-window filename)
         (find-file filename))
@@ -368,11 +377,17 @@ to do."
       (sit-for etags-select-highlight-delay)
       (delete-overlay ov))))
 
-(defun etags-select-goto-tag-other-window (&optional arg)
+(defun etags-select-goto-tag (&optional other-window)
+  "Goto the file/line of the tag under the cursor. Push tag mark."
+  (interactive)
+  (etags-select-push-tag-mark)
+  (etags-select-do-goto-tag other-window))
+
+(defun etags-select-goto-tag-other-window ()
   "Goto the file/line of the tag under the cursor in other window.
-Use the C-u prefix to prevent the etags-select window from closing."
-  (interactive "P")
-  (etags-select-goto-tag arg t))
+Push tag mark."
+  (interactive)
+  (etags-select-goto-tag t))
 
 (defun etags-select-next-tag ()
   "Move to next tag in buffer."
@@ -413,6 +428,12 @@ Use the C-u prefix to prevent the etags-select window from closing."
       (goto-char current-point)
       (message (concat "Couldn't find tag number " tag-num))
       (ding))))
+
+(defun etags-select-push-tag-mark ()
+  "Push tag mark into the ring."
+  (if etags-select-use-xemacs-etags-p
+      (push-tag-mark)
+    (ring-insert find-tag-marker-ring (point-marker))))
 
 ;;; Keymap
 
