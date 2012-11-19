@@ -149,9 +149,6 @@ Only works with GNU Emacs."
 (defvar etags-select-source-buffer nil
   "etags-select source buffer tag was found from.")
 
-(defvar etags-select-opened-window nil
-  "etags-select opened a select window.")
-
 (defconst etags-select-non-tag-regexp "\\(\\s-*$\\|In:\\|Finding tag:\\)"
   "etags-select non-tag regex.")
 
@@ -304,7 +301,6 @@ to do."
            (message (concat "No matches for tag \"" tagname "\""))
            (ding))
           ((and (= tag-count 1) etags-select-no-select-for-one-match)
-           (setq etags-select-opened-window nil)
            (set-buffer etags-select-buffer-name)
            (goto-char (point-min))
            (etags-select-next-tag)
@@ -315,15 +311,11 @@ to do."
            (etags-select-next-tag)
            (set-buffer-modified-p nil)
            (setq buffer-read-only t)
-           (setq etags-select-opened-window (selected-window))
-           (select-window (split-window-vertically))
            (switch-to-buffer etags-select-buffer-name)
            (etags-select-mode tagname)))))
 
-(defun etags-select-goto-tag (&optional arg other-window)
-  "Goto the file/line of the tag under the cursor.
-Use the C-u prefix to prevent the etags-select window from closing."
-  (interactive "P")
+(defun etags-select-goto-tag (&optional other-window)
+  "Goto the file/line of the tag under the cursor. Do not push tag mark."
   (let ((case-fold-search (etags-select-case-fold-search))
         tagname tag-point text-to-search-for filename filename-point (search-count 1))
     (save-excursion
@@ -345,11 +337,6 @@ Use the C-u prefix to prevent the etags-select window from closing."
       (while (re-search-backward (concat "^.*?\\]\\s-+" text-to-search-for) filename-point t)
         (setq search-count (1+ search-count)))
       (goto-char tag-point)
-      (unless arg
-        (kill-buffer etags-select-buffer-name)
-        (when etags-select-opened-window
-          (delete-window (selected-window))
-          (select-window etags-select-opened-window)))
       (switch-to-buffer etags-select-source-buffer)
       (if etags-select-use-xemacs-etags-p
           (push-tag-mark)
@@ -412,8 +399,7 @@ Use the C-u prefix to prevent the etags-select window from closing."
 (defun etags-select-quit ()
   "Quit etags-select buffer."
   (interactive)
-  (kill-buffer nil)
-  (delete-window))
+  (kill-buffer nil))
 
 (defun etags-select-by-tag-number (first-digit)
   "Select a tag by number."
