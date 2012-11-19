@@ -215,25 +215,29 @@ Only works with GNU Emacs."
     (get-file-buffer tag-file)))
 
 ;;;###autoload
-(defun etags-select-find-tag-at-point ()
+(defun etags-select-find-tag-at-point (other-window)
   "Do a find-tag-at-point, and display all exact matches.  If only one match is
 found, see the `etags-select-no-select-for-one-match' variable to decide what
-to do."
-  (interactive)
-  (etags-select-find (find-tag-default)))
+to do. If `etags-select-no-select-for-one-match' is set, C-u prefix can be used
+to open the unique match in other window. If match is not unique prefix argument
+is ignored."
+  (interactive "P")
+  (etags-select-find (find-tag-default) other-window))
 
 ;;;###autoload
-(defun etags-select-find-tag ()
+(defun etags-select-find-tag (other-window)
   "Do a find-tag, and display all exact matches.  If only one match is
 found, see the `etags-select-no-select-for-one-match' variable to decide what
-to do."
-  (interactive)
+to do. If `etags-select-no-select-for-one-match' is set, C-u prefix can be used
+to open the unique match in other window. If match is not unique prefix argument
+is ignored."
+  (interactive "P")
   (setq etags-select-source-buffer (buffer-name))
   (let* ((default (find-tag-default))
          (tagname (completing-read
                    (format "Find tag (default %s): " default)
                    'etags-select-complete-tag nil nil nil 'find-tag-history default)))
-    (etags-select-find tagname)))
+    (etags-select-find tagname other-window)))
 
 (defun etags-select-complete-tag (string predicate what)
   "Tag completion."
@@ -284,7 +288,7 @@ to do."
     (when etags-select-use-short-name-completion
       (setq tags-completion-table-function 'etags-select-tags-completion-table-function))))
 
-(defun etags-select-find (tagname)
+(defun etags-select-find (tagname other-window)
   "Core tag finding function."
   (etags-select-push-tag-mark)
   (let ((tag-files (etags-select-get-tag-files))
@@ -316,7 +320,7 @@ to do."
            (etags-select-mode tagname)
 
            (etags-select-next-tag)
-           (etags-select-do-goto-tag))
+           (etags-select-do-goto-tag other-window))
           (t
            (set-buffer etags-select-buffer-name)
            (goto-char (point-min))
