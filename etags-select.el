@@ -148,6 +148,8 @@ Only works with GNU Emacs."
 
 (defvar etags-select-source-buffer nil
   "etags-select source buffer tag was found from.")
+(make-variable-buffer-local 'etags-select-source-buffer)
+(put 'etags-select-source-buffer 'permanent-local t)
 
 (defconst etags-select-non-tag-regexp "\\(\\s-*$\\|In:\\|Finding tag:\\)"
   "etags-select non-tag regex.")
