@@ -140,9 +140,6 @@ Only works with GNU Emacs."
 
  ;;; Variables
 
-(defvar etags-select-buffer-name "*etags-select*"
-  "etags-select buffer name.")
-
 (defvar etags-select-mode-font-lock-keywords nil
   "etags-select font-lock-keywords.")
 
@@ -150,6 +147,10 @@ Only works with GNU Emacs."
   "etags-select source buffer tag was found from.")
 (make-variable-buffer-local 'etags-select-source-buffer)
 (put 'etags-select-source-buffer 'permanent-local t)
+
+(defvar etags-select-kill-me-on-pop nil
+  "indicates that buffer must be killed when etags-select-pop-tag-mark is called")
+(make-variable-buffer-local 'etags-select-kill-me-on-pop)
 
 (defconst etags-select-non-tag-regexp "\\(\\s-*$\\|In:\\|Finding tag:\\)"
   "etags-select non-tag regex.")
@@ -172,7 +173,8 @@ Only works with GNU Emacs."
         tags-case-fold-search
       case-fold-search)))
 
-(defun etags-select-insert-matches (tagname tag-file tag-count)
+(defun etags-select-insert-matches (tagname select-buffer-name
+                                            tag-file tag-count)
   "Insert matches to tagname in tag-file."
   (let ((tag-table-buffer (etags-select-get-tag-table-buffer tag-file))
         (tag-file-path (file-name-directory tag-file))
@@ -201,7 +203,7 @@ Only works with GNU Emacs."
           (unless (file-name-absolute-p filename)
             (setq filename (concat tag-file-path filename))))
         (save-excursion
-          (set-buffer etags-select-buffer-name)
+          (set-buffer select-buffer-name)
           (when (not (string= filename current-filename))
             (insert "\nIn: " filename "\n")
             (setq current-filename filename))
@@ -240,6 +242,18 @@ is ignored."
                    (format "Find tag (default %s): " default)
                    'etags-select-complete-tag nil nil nil 'find-tag-history default)))
     (etags-select-find tagname other-window)))
+
+;;;###autoload
+(defun etags-select-pop-tag-mark ()
+  "Like `pop-tag-mark' but also performs some etags-select specific
+house keeping."
+  (interactive)
+  (let ((old-buffer (current-buffer))
+        (kill-old-buffer etags-select-kill-me-on-pop))
+    (pop-tag-mark)
+    (when kill-old-buffer
+      (kill-buffer old-buffer))))
+
 
 (defun etags-select-complete-tag (string predicate what)
   "Tag completion."
@@ -294,26 +308,25 @@ is ignored."
   "Core tag finding function."
   (etags-select-push-tag-mark)
   (let ((tag-files (etags-select-get-tag-files))
-        (tag-count 0))
+        (tag-count 0)
+        (select-buffer-name (etags-select-make-buffer-name tagname)))
     (setq etags-select-source-buffer (buffer-name))
-    ;; killing the buffer to avoid stale tag marks that are already in the ring
-    (let ((select-buffer (get-buffer etags-select-buffer-name)))
-      (when select-buffer
-        (kill-buffer etags-select-buffer-name)))
-    (get-buffer-create etags-select-buffer-name)
-    (set-buffer etags-select-buffer-name)
+    (get-buffer-create select-buffer-name)
+    (set-buffer select-buffer-name)
     (setq buffer-read-only nil)
     (erase-buffer)
     (insert "Finding tag: " tagname "\n")
     (mapcar (lambda (tag-file)
-              (setq tag-count (etags-select-insert-matches tagname tag-file tag-count)))
+              (setq tag-count
+                    (etags-select-insert-matches tagname select-buffer-name
+                                                 tag-file tag-count)))
             tag-files)
     (cond ((= tag-count 0)
            (message (concat "No matches for tag \"" tagname "\""))
            (pop-tag-mark)
            (ding))
           ((and (= tag-count 1) etags-select-no-select-for-one-match)
-           (set-buffer etags-select-buffer-name)
+           (set-buffer select-buffer-name)
            (goto-char (point-min))
 
            ;; since selection buffer does not get killed nowadays we need it
@@ -324,12 +337,12 @@ is ignored."
            (etags-select-next-tag)
            (etags-select-do-goto-tag other-window))
           (t
-           (set-buffer etags-select-buffer-name)
+           (set-buffer select-buffer-name)
            (goto-char (point-min))
            (etags-select-next-tag)
            (set-buffer-modified-p nil)
            (setq buffer-read-only t)
-           (switch-to-buffer etags-select-buffer-name)
+           (switch-to-buffer select-buffer-name)
            (etags-select-mode tagname)))))
 
 (defun etags-select-do-goto-tag (&optional other-window)
@@ -441,6 +454,19 @@ Push tag mark."
       (push-tag-mark)
     (ring-insert find-tag-marker-ring (point-marker))))
 
+(defun etags-select-make-buffer-name (tagname)
+  "Make unique name for tag selection buffer."
+  (let ((i 0)
+        break
+        candidate-name)
+    (while (not break)
+      (setq candidate-name (format "*etags-select (%s) (%d)*" tagname i))
+      (unless (get-buffer candidate-name)
+        ;; free name
+        (setq break t))
+      (setq i (1+ i)))
+    candidate-name))
+
 ;;; Keymap
 
 (defvar etags-select-mode-map nil "'etags-select-mode' keymap.")
@@ -492,6 +518,7 @@ Push tag mark."
 \\{etags-select-mode-map}"
   (interactive)
   (kill-all-local-variables)
+  (setq etags-select-kill-me-on-pop t)
   (setq major-mode 'etags-select-mode)
   (setq mode-name "etags-select")
   (set-syntax-table text-mode-syntax-table)
