@@ -143,11 +143,6 @@ Only works with GNU Emacs."
 (defvar etags-select-mode-font-lock-keywords nil
   "etags-select font-lock-keywords.")
 
-(defvar etags-select-source-buffer nil
-  "etags-select source buffer tag was found from.")
-(make-variable-buffer-local 'etags-select-source-buffer)
-(put 'etags-select-source-buffer 'permanent-local t)
-
 (defvar etags-select-kill-me-on-pop nil
   "indicates that buffer must be killed when etags-select-pop-tag-mark is called")
 (make-variable-buffer-local 'etags-select-kill-me-on-pop)
@@ -236,11 +231,12 @@ to do. If `etags-select-no-select-for-one-match' is set, C-u prefix can be used
 to open the unique match in other window. If match is not unique prefix argument
 is ignored."
   (interactive "P")
-  (setq etags-select-source-buffer (buffer-name))
   (let* ((default (find-tag-default))
          (tagname (completing-read
                    (format "Find tag (default %s): " default)
-                   'etags-select-complete-tag nil nil nil 'find-tag-history default)))
+                   (lambda (string predicate what)
+                     (etags-select-complete-tag string predicate what (buffer-name)))
+                   nil nil nil 'find-tag-history default)))
     (etags-select-find tagname other-window)))
 
 ;;;###autoload
@@ -255,17 +251,17 @@ house keeping."
       (kill-buffer old-buffer))))
 
 
-(defun etags-select-complete-tag (string predicate what)
+(defun etags-select-complete-tag (string predicate what buffer)
   "Tag completion."
-  (etags-select-build-completion-table)
+  (etags-select-build-completion-table buffer)
   (if (eq what t)
       (all-completions string (etags-select-get-completion-table) predicate)
     (try-completion string (etags-select-get-completion-table) predicate)))
 
-(defun etags-select-build-completion-table ()
+(defun etags-select-build-completion-table (buffer)
   "Build tag completion table."
   (save-excursion
-    (set-buffer etags-select-source-buffer)
+    (set-buffer buffer)
     (let ((tag-files (etags-select-get-tag-files)))
       (mapcar (lambda (tag-file) (etags-select-get-tag-table-buffer tag-file)) tag-files))))
 
@@ -310,7 +306,6 @@ house keeping."
   (let ((tag-files (etags-select-get-tag-files))
         (tag-count 0)
         (select-buffer-name (etags-select-make-buffer-name tagname)))
-    (setq etags-select-source-buffer (buffer-name))
     (get-buffer-create select-buffer-name)
     (set-buffer select-buffer-name)
     (setq buffer-read-only nil)
@@ -368,7 +363,6 @@ house keeping."
       (while (re-search-backward (concat "^.*?\\]\\s-+" text-to-search-for) filename-point t)
         (setq search-count (1+ search-count)))
       (goto-char tag-point)
-      (switch-to-buffer etags-select-source-buffer)
       (if other-window
           (find-file-other-window filename)
         (find-file filename))
