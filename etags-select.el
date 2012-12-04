@@ -26,8 +26,7 @@
 ;;; Commentary:
 
 ;; Open a buffer with file/lines of exact-match tags shown.  Select one by
-;; going to a line and pressing return.  pop-tag-mark still works with this
-;; code.
+;; going to a line and pressing return.
 ;;
 ;; If there is only one match, you can skip opening the selection window by
 ;; setting a custom variable.  This means you could substitute the key binding
@@ -38,6 +37,7 @@
 ;; I use this:
 ;; (global-set-key "\M-?" 'etags-select-find-tag-at-point)
 ;; (global-set-key "\M-." 'etags-select-find-tag)
+;; (global-set-key "\M-*" 'etags-select-pop-tag-mark)
 ;;
 ;; Contributers of ideas and/or code:
 ;; David Engster
