@@ -217,9 +217,8 @@ Only works with GNU Emacs."
 (defun etags-select-find-tag-at-point (other-window)
   "Do a find-tag-at-point, and display all exact matches.  If only one match is
 found, see the `etags-select-no-select-for-one-match' variable to decide what
-to do. If `etags-select-no-select-for-one-match' is set, C-u prefix can be used
-to open the unique match in other window. If match is not unique prefix argument
-is ignored."
+to do. With C-u prefix tag selection window or the match will be open in
+other window."
   (interactive "P")
   (etags-select-find (find-tag-default) other-window))
 
@@ -227,9 +226,8 @@ is ignored."
 (defun etags-select-find-tag (other-window)
   "Do a find-tag, and display all exact matches.  If only one match is
 found, see the `etags-select-no-select-for-one-match' variable to decide what
-to do. If `etags-select-no-select-for-one-match' is set, C-u prefix can be used
-to open the unique match in other window. If match is not unique prefix argument
-is ignored."
+to do. With C-u prefix tag selection window or the match will be open in
+other window."
   (interactive "P")
   (let* ((default (find-tag-default))
          (tagname (completing-read
@@ -338,7 +336,9 @@ house keeping."
            (etags-select-next-tag)
            (set-buffer-modified-p nil)
            (setq buffer-read-only t)
-           (switch-to-buffer select-buffer-name)
+           (if other-window
+               (switch-to-buffer-other-window select-buffer-name)
+             (switch-to-buffer select-buffer-name))
            (etags-select-mode tagname)))))
 
 (defun etags-select-do-goto-tag (&optional other-window)
