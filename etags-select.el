@@ -330,7 +330,8 @@ house keeping."
            (etags-select-mode tagname)
 
            (etags-select-next-tag)
-           (etags-select-do-goto-tag other-window))
+           (etags-select-do-goto-tag other-window)
+           (kill-buffer select-buffer-name))
           (t
            (set-buffer select-buffer-name)
            (goto-char (point-min))
