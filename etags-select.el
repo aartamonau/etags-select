@@ -138,6 +138,13 @@ Only works with GNU Emacs."
   :group 'etags-select-mode
   :type 'boolean)
 
+;;;###autoload
+(defcustom etags-select-kill-artifact-buffers nil
+  "*If non-nil, kill buffers that were opened while building tag selection
+buffer."
+  :group 'etags-select-mode
+  :type 'boolean)
+
  ;;; Variables
 
 (defvar etags-select-mode-font-lock-keywords nil
@@ -167,6 +174,47 @@ Only works with GNU Emacs."
     (if (memq tags-case-fold-search '(nil t))
         tags-case-fold-search
       case-fold-search)))
+
+(defun etags-select-buffers-set ()
+  "Return a set containing all the buffer that currently exist."
+  (let ((buffers-set (make-hash-table :test 'eq)))
+    (dolist (buffer (buffer-list))
+      (puthash buffer t buffers-set))
+    buffers-set))
+
+(defun etags-select-find-matches (tagname find-tag-fn)
+  "Find all the matches for a specified tag."
+  (let ((buffers-set (etags-select-buffers-set))
+        (matches '())
+        (last-match-buffer nil)
+        (done nil)
+        (current-match-buffer (funcall find-tag-fn tagname)))
+    (while (not done)
+      (with-current-buffer current-match-buffer
+        (let* ((match-point (point))
+               (match-file (buffer-file-name current-match-buffer))
+               (match (cons match-file match-point)))
+          ;; restore old mark
+          (if (mark t)
+              (pop-to-mark-command))
+
+          (setq last-match-buffer current-match-buffer)
+          (setq matches (cons match matches))
+
+          (condition-case ex
+              (setq current-match-buffer (funcall find-tag-fn tagname t))
+            ('error (progn
+                      (setq done t)
+                      (setq current-match-buffer nil))))
+
+          ;; kill the buffer if it was open by 'find-tag-fn
+          (if (and etags-select-kill-artifact-buffers
+                   last-match-buffer
+                   (not (eq last-match-buffer current-match-buffer))
+                   (not (gethash last-match-buffer buffers-set)))
+              (let ((kill-buffer-query-functions '()))
+                (kill-buffer last-match-buffer))))))
+    (reverse matches)))
 
 (defun etags-select-insert-matches (tagname select-buffer-name
                                             tag-file tag-count)
