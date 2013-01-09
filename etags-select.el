@@ -139,7 +139,7 @@ Only works with GNU Emacs."
   :type 'boolean)
 
 ;;;###autoload
-(defcustom etags-select-kill-artifact-buffers nil
+(defcustom etags-select-kill-artifact-buffers t
   "*If non-nil, kill buffers that were opened while building tag selection
 buffer."
   :group 'etags-select-mode
@@ -182,6 +182,12 @@ buffer."
       (puthash buffer t buffers-set))
     buffers-set))
 
+(defun etags-select-copy-line ()
+  "Copy current line."
+  (let ((begin (line-beginning-position))
+        (end (line-end-position)))
+    (buffer-substring-no-properties begin end)))
+
 (defun etags-select-find-matches (tagname find-tag-fn)
   "Find all the matches for a specified tag."
   (let ((buffers-set (etags-select-buffers-set))
@@ -193,7 +199,10 @@ buffer."
       (with-current-buffer current-match-buffer
         (let* ((match-point (point))
                (match-file (buffer-file-name current-match-buffer))
-               (match (cons match-file match-point)))
+               (match-position (cons match-file match-point))
+               (match-string (etags-select-copy-line))
+               (match (cons match-string match-position)))
+
           ;; restore old mark
           (if (mark t)
               (pop-to-mark-command))
