@@ -192,23 +192,22 @@ buffer."
   "Find all the matches for a specified tag."
   (let ((buffers-set (etags-select-buffers-set))
         (matches '())
+        (file-matches '())
         (last-match-buffer nil)
         (done nil)
         (current-match-buffer (funcall find-tag-fn tagname)))
     (while (not done)
       (with-current-buffer current-match-buffer
         (let* ((match-point (point))
-               (match-file (buffer-file-name current-match-buffer))
-               (match-position (cons match-file match-point))
                (match-string (etags-select-copy-line))
-               (match (cons match-string match-position)))
+               (match (cons match-string match-point)))
 
           ;; restore old mark
           (if (mark t)
               (pop-to-mark-command))
 
           (setq last-match-buffer current-match-buffer)
-          (setq matches (cons match matches))
+          (setq file-matches (cons match file-matches))
 
           (condition-case ex
               (setq current-match-buffer (funcall find-tag-fn tagname t))
@@ -216,13 +215,18 @@ buffer."
                       (setq done t)
                       (setq current-match-buffer nil))))
 
-          ;; kill the buffer if it was open by 'find-tag-fn
-          (if (and etags-select-kill-artifact-buffers
-                   last-match-buffer
-                   (not (eq last-match-buffer current-match-buffer))
-                   (not (gethash last-match-buffer buffers-set)))
+          (when (and last-match-buffer
+                     (not (eq last-match-buffer current-match-buffer)))
+            (let ((match-file (buffer-file-name last-match-buffer)))
+              (setq matches (cons (cons match-file (reverse file-matches))
+                                  matches))
+              (setq file-matches '()))
+
+            ;; kill the buffer if it was open by 'find-tag-fn
+            (when (and etags-select-kill-artifact-buffers
+                       (not (gethash last-match-buffer buffers-set)))
               (let ((kill-buffer-query-functions '()))
-                (kill-buffer last-match-buffer))))))
+                (kill-buffer last-match-buffer)))))))
     (reverse matches)))
 
 (defun etags-select-insert-matches (tagname select-buffer-name
