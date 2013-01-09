@@ -157,6 +157,11 @@ buffer."
 (defconst etags-select-non-tag-regexp "\\(\\s-*$\\|In:\\|Finding tag:\\)"
   "etags-select non-tag regex.")
 
+(defvar etags-select-match-positions nil)
+(make-variable-buffer-local 'etags-select-match-positions)
+(put 'etags-select-match-positions 'permanent-local t)
+
+
 ;;; Functions
 
 (if (string-match "XEmacs" emacs-version)
@@ -228,6 +233,26 @@ buffer."
               (let ((kill-buffer-query-functions '()))
                 (kill-buffer last-match-buffer)))))))
     (reverse matches)))
+
+(defun etags-select-insert-matches-new (tagname select-buffer-name matches)
+  "Insert matches to tagname in tag-file."
+  (set-buffer select-buffer-name)
+  (setq etags-select-match-positions (make-hash-table :test 'eq))
+  (insert "Finding tag: " tagname "\n")
+  (let ((count 0))
+    (dolist (match matches count)
+      (let ((match-file-name (car match))
+            (file-matches (cdr match)))
+        (insert "\nIn: " match-file-name "\n")
+        (dolist (item file-matches)
+          (setq count (1+ count))
+          (let ((match-string (car item))
+                (match-point (cdr item)))
+            (puthash (line-number-at-pos)
+                     (cons match-file-name match-point)
+                     etags-select-match-positions)
+            (insert (int-to-string count) " " match-string "\n")))))))
+
 
 (defun etags-select-insert-matches (tagname select-buffer-name
                                             tag-file tag-count)
@@ -358,6 +383,45 @@ house keeping."
     "Turn on short tag name completion (maybe)"
     (when etags-select-use-short-name-completion
       (setq tags-completion-table-function 'etags-select-tags-completion-table-function))))
+
+(defun etags-select-find-new (tagname find-tag-fn other-window)
+  "Core tag finding function."
+  (etags-select-push-tag-mark)
+  (let ((tag-count 0)
+        (select-buffer-name (etags-select-make-buffer-name tagname))
+        (matches (etags-select-find-matches tagname find-tag-fn)))
+    (get-buffer-create select-buffer-name)
+    (set-buffer select-buffer-name)
+    (erase-buffer)
+    (setq tag-count (etags-select-insert-matches-new tagname
+                                                     select-buffer-name matches))
+
+    (cond ((= tag-count 0)
+           (message (concat "No matches for tag \"" tagname "\""))
+           (pop-tag-mark)
+           (ding))
+          ((and (= tag-count 1) etags-select-no-select-for-one-match)
+           (set-buffer select-buffer-name)
+           (goto-char (point-min))
+
+           ;; since selection buffer does not get killed nowadays we need it
+           ;; to look attractive for the user
+           (setq buffer-read-only t)
+           (etags-select-mode tagname)
+
+           (etags-select-next-tag)
+           (etags-select-do-goto-tag other-window)
+           (kill-buffer select-buffer-name))
+          (t
+           (set-buffer select-buffer-name)
+           (goto-char (point-min))
+           (etags-select-next-tag)
+           (set-buffer-modified-p nil)
+           (setq buffer-read-only t)
+           (if other-window
+               (switch-to-buffer-other-window select-buffer-name)
+             (switch-to-buffer select-buffer-name))
+           (etags-select-mode tagname)))))
 
 (defun etags-select-find (tagname other-window)
   "Core tag finding function."
