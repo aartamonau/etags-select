@@ -351,42 +351,43 @@ house keeping."
 
 (defun etags-select-find (tagname find-tag-fn other-window)
   "Core tag finding function."
-  (etags-select-push-tag-mark)
-  (let ((tag-count 0)
-        (select-buffer-name (etags-select-make-buffer-name tagname))
-        (matches (etags-select-find-matches tagname find-tag-fn)))
-    (get-buffer-create select-buffer-name)
-    (set-buffer select-buffer-name)
-    (erase-buffer)
-    (setq tag-count (etags-select-insert-matches tagname
-                                                 select-buffer-name matches))
+  (when tagname
+    (etags-select-push-tag-mark)
+    (let ((tag-count 0)
+          (select-buffer-name (etags-select-make-buffer-name tagname))
+          (matches (etags-select-find-matches tagname find-tag-fn)))
+      (get-buffer-create select-buffer-name)
+      (set-buffer select-buffer-name)
+      (erase-buffer)
+      (setq tag-count (etags-select-insert-matches tagname
+                                                   select-buffer-name matches))
 
-    (cond ((= tag-count 0)
-           (message (concat "No matches for tag \"" tagname "\""))
-           (pop-tag-mark)
-           (ding))
-          ((and (= tag-count 1) etags-select-no-select-for-one-match)
-           (set-buffer select-buffer-name)
-           (goto-char (point-min))
+      (cond ((= tag-count 0)
+             (message (concat "No matches for tag \"" tagname "\""))
+             (pop-tag-mark)
+             (ding))
+            ((and (= tag-count 1) etags-select-no-select-for-one-match)
+             (set-buffer select-buffer-name)
+             (goto-char (point-min))
 
-           ;; since selection buffer does not get killed nowadays we need it
-           ;; to look attractive for the user
-           (setq buffer-read-only t)
-           (etags-select-mode tagname)
+             ;; since selection buffer does not get killed nowadays we need it
+             ;; to look attractive for the user
+             (setq buffer-read-only t)
+             (etags-select-mode tagname)
 
-           (etags-select-next-tag)
-           (etags-select-do-goto-tag other-window)
-           (kill-buffer select-buffer-name))
-          (t
-           (set-buffer select-buffer-name)
-           (goto-char (point-min))
-           (etags-select-next-tag)
-           (set-buffer-modified-p nil)
-           (setq buffer-read-only t)
-           (if other-window
-               (switch-to-buffer-other-window select-buffer-name)
-             (switch-to-buffer select-buffer-name))
-           (etags-select-mode tagname)))))
+             (etags-select-next-tag)
+             (etags-select-do-goto-tag other-window)
+             (kill-buffer select-buffer-name))
+            (t
+             (set-buffer select-buffer-name)
+             (goto-char (point-min))
+             (etags-select-next-tag)
+             (set-buffer-modified-p nil)
+             (setq buffer-read-only t)
+             (if other-window
+                 (switch-to-buffer-other-window select-buffer-name)
+               (switch-to-buffer select-buffer-name))
+             (etags-select-mode tagname))))))
 
 (defun etags-select-do-goto-tag (&optional other-window)
   "Goto the file/line of the tag under the cursor. Do not push tag mark."
