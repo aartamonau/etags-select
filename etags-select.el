@@ -481,17 +481,22 @@ Push tag mark."
     (ring-insert find-tag-marker-ring (point-marker))))
 
 (defun etags-select-get-tag-marks ()
+  "Return current state of tag marks."
   (if etags-select-use-xemacs-etags-p
       (cons (copy-tree tag-mark-stack1) (copy-tree tag-mark-stack2))
     (ring-copy find-tag-marker-ring)))
 
 (defun etags-select-set-tag-marks (marks)
+  "Set current tag marks to the value previously returned by
+`etags-select-get-tag-marks'."
   (if etags-select-use-xemacs-etags-p
       (progn (setq tag-mark-stack1 (car marks))
              (setq tag-mark-stack2 (cdr marks)))
     (setq find-tag-marker-ring marks)))
 
 (defmacro etags-select-save-tag-marks (&rest body)
+  "Execute body that potentially pushes or pops tag marks. Restore the old value
+after that."
   (declare (indent 1) (debug t))
   (let ((var (make-symbol "old-marks")))
     `(let ((,var (etags-select-get-tag-marks)))
