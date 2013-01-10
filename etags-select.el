@@ -195,16 +195,25 @@ buffer."
         (end (line-end-position)))
     (buffer-substring-no-properties begin end)))
 
+(defun etags-select-find-match (tagname next-p find-tag-fn)
+  "Find tag match. Return `nil' on failure"
+  (condition-case ex
+      (funcall find-tag-fn tagname next-p)
+    ('error nil)))
+
 (defun etags-select-find-matches (tagname find-tag-fn)
   "Find all the matches for a specified tag."
   (etags-select-save-tag-marks
-      (let ((buffers-set (etags-select-buffers-set))
-            (matches '())
-            (file-matches '())
-            (last-match-buffer nil)
-            (done nil)
-            (current-match-buffer (funcall find-tag-fn tagname)))
-        (while (not done)
+      (let* ((buffers-set (etags-select-buffers-set))
+             (matches '())
+             (file-matches '())
+             (last-match-buffer nil)
+             (next-p nil)
+             (current-match-buffer (etags-select-find-match tagname
+                                                            next-p find-tag-fn)))
+        (while current-match-buffer
+          (setq next-p t)
+
           (with-current-buffer current-match-buffer
             (let* ((match-point (point))
                    (match-string (etags-select-copy-line))
@@ -217,11 +226,8 @@ buffer."
               (setq last-match-buffer current-match-buffer)
               (setq file-matches (cons match file-matches))
 
-              (condition-case ex
-                  (setq current-match-buffer (funcall find-tag-fn tagname t))
-                ('error (progn
-                          (setq done t)
-                          (setq current-match-buffer nil))))
+              (setq current-match-buffer
+                    (etags-select-find-match tagname next-p find-tag-fn))
 
               (when (and last-match-buffer
                          (not (eq last-match-buffer current-match-buffer)))
