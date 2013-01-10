@@ -81,6 +81,8 @@
 (require 'custom)
 (require 'etags)
 
+(eval-when-compile (require 'cl))
+
 ;;; Custom stuff
 
 ;;;###autoload
@@ -195,44 +197,45 @@ buffer."
 
 (defun etags-select-find-matches (tagname find-tag-fn)
   "Find all the matches for a specified tag."
-  (let ((buffers-set (etags-select-buffers-set))
-        (matches '())
-        (file-matches '())
-        (last-match-buffer nil)
-        (done nil)
-        (current-match-buffer (funcall find-tag-fn tagname)))
-    (while (not done)
-      (with-current-buffer current-match-buffer
-        (let* ((match-point (point))
-               (match-string (etags-select-copy-line))
-               (match (cons match-string match-point)))
+  (etags-select-save-tag-marks
+      (let ((buffers-set (etags-select-buffers-set))
+            (matches '())
+            (file-matches '())
+            (last-match-buffer nil)
+            (done nil)
+            (current-match-buffer (funcall find-tag-fn tagname)))
+        (while (not done)
+          (with-current-buffer current-match-buffer
+            (let* ((match-point (point))
+                   (match-string (etags-select-copy-line))
+                   (match (cons match-string match-point)))
 
-          ;; restore old mark
-          (if (mark t)
-              (pop-to-mark-command))
+              ;; restore old mark
+              (if (mark t)
+                  (pop-to-mark-command))
 
-          (setq last-match-buffer current-match-buffer)
-          (setq file-matches (cons match file-matches))
+              (setq last-match-buffer current-match-buffer)
+              (setq file-matches (cons match file-matches))
 
-          (condition-case ex
-              (setq current-match-buffer (funcall find-tag-fn tagname t))
-            ('error (progn
-                      (setq done t)
-                      (setq current-match-buffer nil))))
+              (condition-case ex
+                  (setq current-match-buffer (funcall find-tag-fn tagname t))
+                ('error (progn
+                          (setq done t)
+                          (setq current-match-buffer nil))))
 
-          (when (and last-match-buffer
-                     (not (eq last-match-buffer current-match-buffer)))
-            (let ((match-file (buffer-file-name last-match-buffer)))
-              (setq matches (cons (cons match-file (reverse file-matches))
-                                  matches))
-              (setq file-matches '()))
+              (when (and last-match-buffer
+                         (not (eq last-match-buffer current-match-buffer)))
+                (let ((match-file (buffer-file-name last-match-buffer)))
+                  (setq matches (cons (cons match-file (reverse file-matches))
+                                      matches))
+                  (setq file-matches '()))
 
-            ;; kill the buffer if it was open by 'find-tag-fn
-            (when (and etags-select-kill-artifact-buffers
-                       (not (gethash last-match-buffer buffers-set)))
-              (let ((kill-buffer-query-functions '()))
-                (kill-buffer last-match-buffer)))))))
-    (reverse matches)))
+                ;; kill the buffer if it was open by 'find-tag-fn
+                (when (and etags-select-kill-artifact-buffers
+                           (not (gethash last-match-buffer buffers-set)))
+                  (let ((kill-buffer-query-functions '()))
+                    (kill-buffer last-match-buffer)))))))
+        (reverse matches))))
 
 (defun etags-select-insert-matches (tagname select-buffer-name matches)
   "Insert matches to tagname in tag-file."
@@ -469,6 +472,25 @@ Push tag mark."
   (if etags-select-use-xemacs-etags-p
       (push-tag-mark)
     (ring-insert find-tag-marker-ring (point-marker))))
+
+(defun etags-select-get-tag-marks ()
+  (if etags-select-use-xemacs-etags-p
+      (cons (copy-tree tag-mark-stack1) (copy-tree tag-mark-stack2))
+    (ring-copy find-tag-marker-ring)))
+
+(defun etags-select-set-tag-marks (marks)
+  (if etags-select-use-xemacs-etags-p
+      (progn (setq tag-mark-stack1 (car marks))
+             (setq tag-mark-stack2 (cdr marks)))
+    (setq find-tag-marker-ring marks)))
+
+(defmacro etags-select-save-tag-marks (&rest body)
+  (declare (indent 1) (debug t))
+  (let ((var (make-symbol "old-marks")))
+    `(let ((,var (etags-select-get-tag-marks)))
+       (unwind-protect
+           (progn ,@body)
+         (etags-select-set-tag-marks ,var)))))
 
 (defun etags-select-make-buffer-name (tagname)
   "Make unique name for tag selection buffer."
