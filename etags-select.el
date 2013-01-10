@@ -234,7 +234,7 @@ buffer."
                 (kill-buffer last-match-buffer)))))))
     (reverse matches)))
 
-(defun etags-select-insert-matches-new (tagname select-buffer-name matches)
+(defun etags-select-insert-matches (tagname select-buffer-name matches)
   "Insert matches to tagname in tag-file."
   (set-buffer select-buffer-name)
   (setq etags-select-match-positions (make-hash-table :test 'eq))
@@ -253,45 +253,6 @@ buffer."
                      etags-select-match-positions)
             (insert (int-to-string count) " " match-string "\n")))))))
 
-
-(defun etags-select-insert-matches (tagname select-buffer-name
-                                            tag-file tag-count)
-  "Insert matches to tagname in tag-file."
-  (let ((tag-table-buffer (etags-select-get-tag-table-buffer tag-file))
-        (tag-file-path (file-name-directory tag-file))
-        (tag-regex (concat "^.*?\\(" "\^?\\(.+[:.']" tagname "\\)\^A"
-                           "\\|" "\^?" tagname "\^A"
-                           "\\|" "\\<" tagname "[ \f\t()=,;]*\^?[0-9,]"
-                           "\\)"))
-        (case-fold-search (etags-select-case-fold-search))
-        full-tagname tag-line filename current-filename)
-    (set-buffer tag-table-buffer)
-    (modify-syntax-entry ?_ "w")
-    (goto-char (point-min))
-    (while (search-forward tagname nil t)
-      (beginning-of-line)
-      (when (re-search-forward tag-regex (point-at-eol) 'goto-eol)
-        (setq full-tagname (or (etags-select-match-string 2) tagname))
-        (setq tag-count (1+ tag-count))
-        (beginning-of-line)
-        (re-search-forward "\\s-*\\(.*?\\)\\s-*\^?")
-        (setq tag-line (etags-select-match-string 1))
-        (end-of-line)
-        (save-excursion
-          (re-search-backward "\f")
-          (re-search-forward "^\\(.*?\\),")
-          (setq filename (etags-select-match-string 1))
-          (unless (file-name-absolute-p filename)
-            (setq filename (concat tag-file-path filename))))
-        (save-excursion
-          (set-buffer select-buffer-name)
-          (when (not (string= filename current-filename))
-            (insert "\nIn: " filename "\n")
-            (setq current-filename filename))
-          (insert (int-to-string tag-count) " [" full-tagname "] " tag-line "\n"))))
-    (modify-syntax-entry ?_ "_")
-    tag-count))
-
 (defun etags-select-get-tag-table-buffer (tag-file)
   "Get tag table buffer for a tag file."
   (if etags-select-use-xemacs-etags-p
@@ -306,7 +267,8 @@ found, see the `etags-select-no-select-for-one-match' variable to decide what
 to do. With C-u prefix tag selection window or the match will be open in
 other window."
   (interactive "P")
-  (etags-select-find (find-tag-default) other-window))
+  (etags-select-find (find-tag-default)
+                     'find-tag-noselect other-window))
 
 ;;;###autoload
 (defun etags-select-find-tag (other-window)
@@ -321,7 +283,7 @@ other window."
                    (lambda (string predicate what)
                      (etags-select-complete-tag string predicate what (buffer-name)))
                    nil nil nil 'find-tag-history default)))
-    (etags-select-find tagname other-window)))
+    (etags-select-find tagname 'find-tag-noselect other-window)))
 
 ;;;###autoload
 (defun etags-select-pop-tag-mark ()
@@ -384,7 +346,7 @@ house keeping."
     (when etags-select-use-short-name-completion
       (setq tags-completion-table-function 'etags-select-tags-completion-table-function))))
 
-(defun etags-select-find-new (tagname find-tag-fn other-window)
+(defun etags-select-find (tagname find-tag-fn other-window)
   "Core tag finding function."
   (etags-select-push-tag-mark)
   (let ((tag-count 0)
@@ -393,52 +355,9 @@ house keeping."
     (get-buffer-create select-buffer-name)
     (set-buffer select-buffer-name)
     (erase-buffer)
-    (setq tag-count (etags-select-insert-matches-new tagname
-                                                     select-buffer-name matches))
+    (setq tag-count (etags-select-insert-matches tagname
+                                                 select-buffer-name matches))
 
-    (cond ((= tag-count 0)
-           (message (concat "No matches for tag \"" tagname "\""))
-           (pop-tag-mark)
-           (ding))
-          ((and (= tag-count 1) etags-select-no-select-for-one-match)
-           (set-buffer select-buffer-name)
-           (goto-char (point-min))
-
-           ;; since selection buffer does not get killed nowadays we need it
-           ;; to look attractive for the user
-           (setq buffer-read-only t)
-           (etags-select-mode tagname)
-
-           (etags-select-next-tag)
-           (etags-select-do-goto-tag other-window)
-           (kill-buffer select-buffer-name))
-          (t
-           (set-buffer select-buffer-name)
-           (goto-char (point-min))
-           (etags-select-next-tag)
-           (set-buffer-modified-p nil)
-           (setq buffer-read-only t)
-           (if other-window
-               (switch-to-buffer-other-window select-buffer-name)
-             (switch-to-buffer select-buffer-name))
-           (etags-select-mode tagname)))))
-
-(defun etags-select-find (tagname other-window)
-  "Core tag finding function."
-  (etags-select-push-tag-mark)
-  (let ((tag-files (etags-select-get-tag-files))
-        (tag-count 0)
-        (select-buffer-name (etags-select-make-buffer-name tagname)))
-    (get-buffer-create select-buffer-name)
-    (set-buffer select-buffer-name)
-    (setq buffer-read-only nil)
-    (erase-buffer)
-    (insert "Finding tag: " tagname "\n")
-    (mapcar (lambda (tag-file)
-              (setq tag-count
-                    (etags-select-insert-matches tagname select-buffer-name
-                                                 tag-file tag-count)))
-            tag-files)
     (cond ((= tag-count 0)
            (message (concat "No matches for tag \"" tagname "\""))
            (pop-tag-mark)
@@ -468,41 +387,18 @@ house keeping."
 
 (defun etags-select-do-goto-tag (&optional other-window)
   "Goto the file/line of the tag under the cursor. Do not push tag mark."
-  (let ((case-fold-search (etags-select-case-fold-search))
-        tagname tag-point text-to-search-for filename filename-point (search-count 1))
-    (save-excursion
-      (goto-char (point-min))
-      (re-search-forward "Finding tag: \\(.*\\)$")
-      (setq tagname (etags-select-match-string 1)))
-    (beginning-of-line)
-    (if (looking-at etags-select-non-tag-regexp)
+  ;; TODO remove me
+  (interactive)
+  (let* ((line (line-number-at-pos))
+         (match-position (gethash line etags-select-match-positions))
+         (match-file (car match-position))
+         (match-point (cdr match-position)))
+    (if (not match-position)
         (message "Please put the cursor on a line with the tag.")
-      (setq tag-point (point))
-      (setq overlay-arrow-position (point-marker))
-      (re-search-forward "\\]\\s-+\\(.+?\\)\\s-*$")
-      (setq text-to-search-for (regexp-quote (etags-select-match-string 1)))
-      (goto-char tag-point)
-      (re-search-backward "^In: \\(.*\\)$")
-      (setq filename (etags-select-match-string 1))
-      (setq filename-point (point))
-      (goto-char tag-point)
-      (while (re-search-backward (concat "^.*?\\]\\s-+" text-to-search-for) filename-point t)
-        (setq search-count (1+ search-count)))
-      (goto-char tag-point)
       (if other-window
-          (find-file-other-window filename)
-        (find-file filename))
-      (goto-char (point-min))
-      (while (> search-count 0)
-        (unless (re-search-forward (concat "^\\s-*" text-to-search-for) nil t)
-          (message "TAGS file out of date ... stopping at closest match")
-          (setq search-count 1))
-        (setq search-count (1- search-count)))
-      (beginning-of-line)
-      (re-search-forward tagname)
-      (goto-char (match-beginning 0))
-      (when etags-select-highlight-tag-after-jump
-        (etags-select-highlight (match-beginning 0) (match-end 0))))))
+          (find-file-other-window match-file)
+        (find-file match-file))
+      (goto-char match-point))))
 
 (defun etags-select-highlight (beg end)
   "Highlight a region temporarily."
