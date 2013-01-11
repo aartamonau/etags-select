@@ -195,10 +195,10 @@ buffer."
         (end (line-end-position)))
     (buffer-substring-no-properties begin end)))
 
-(defun etags-select-find-match (tagname next-p find-tag-fn)
-  "Find tag match. Return `nil' on failure"
+(defun etags-select-find-next-match (tagname find-tag-fn)
+  "Find next tag match. Return `nil' on failure"
   (condition-case ex
-      (funcall find-tag-fn tagname next-p)
+      (funcall find-tag-fn tagname t)
     ('error nil)))
 
 (defun etags-select-find-matches (tagname find-tag-fn)
@@ -209,8 +209,13 @@ buffer."
              (file-matches '())
              (last-match-buffer nil)
              (next-p nil)
-             (current-match-buffer (etags-select-find-match tagname
-                                                            next-p find-tag-fn)))
+             ;; If some error happens here it will go through since we want
+             ;; user to be aware of it. As the first call to `find-tag-fn'
+             ;; suceeds, we expect successive ones not to fail. With an
+             ;; important exception of the last tag in the loop. So basically
+             ;; *any* error thrown by the subsequent calls to `find-tag-fn' is
+             ;; treated just as a signal that there're no more matching tags.
+             (current-match-buffer (funcall find-tag-fn tagname)))
         (while current-match-buffer
           (setq next-p t)
 
@@ -227,7 +232,7 @@ buffer."
               (setq file-matches (cons match file-matches))
 
               (setq current-match-buffer
-                    (etags-select-find-match tagname next-p find-tag-fn))
+                    (etags-select-find-next-match tagname find-tag-fn))
 
               (when (and last-match-buffer
                          (not (eq last-match-buffer current-match-buffer)))
@@ -358,42 +363,50 @@ house keeping."
 (defun etags-select-find (tagname find-tag-fn other-window)
   "Core tag finding function."
   (when tagname
-    (etags-select-push-tag-mark)
     (let ((tag-count 0)
           (select-buffer-name (etags-select-make-buffer-name tagname))
           (matches (etags-select-find-matches tagname find-tag-fn)))
-      (get-buffer-create select-buffer-name)
-      (set-buffer select-buffer-name)
-      (erase-buffer)
-      (setq tag-count (etags-select-insert-matches tagname
-                                                   select-buffer-name matches))
 
-      (cond ((= tag-count 0)
+      (cond ((null matches)
+             ;; This is not very elegant because functions like
+             ;; `find-tag-noselect' throw an error when there're no
+             ;; matches. And thus we'll never reach this case. But I'll leave
+             ;; it here in order to support tag matching functions that behave
+             ;; differently.
              (message (concat "No matches for tag \"" tagname "\""))
-             (pop-tag-mark)
              (ding))
-            ((and (= tag-count 1) etags-select-no-select-for-one-match)
-             (set-buffer select-buffer-name)
-             (goto-char (point-min))
-
-             ;; since selection buffer does not get killed nowadays we need it
-             ;; to look attractive for the user
-             (setq buffer-read-only t)
-             (etags-select-mode tagname)
-
-             (etags-select-next-tag)
-             (etags-select-do-goto-tag other-window)
-             (kill-buffer select-buffer-name))
             (t
+             (etags-select-push-tag-mark)
+             (get-buffer-create select-buffer-name)
              (set-buffer select-buffer-name)
-             (goto-char (point-min))
-             (etags-select-next-tag)
-             (set-buffer-modified-p nil)
-             (setq buffer-read-only t)
-             (if other-window
-                 (switch-to-buffer-other-window select-buffer-name)
-               (switch-to-buffer select-buffer-name))
-             (etags-select-mode tagname))))))
+             (erase-buffer)
+             (setq tag-count
+                   (etags-select-insert-matches tagname
+                                                select-buffer-name matches))
+
+             (cond ((and (= tag-count 1)
+                         etags-select-no-select-for-one-match)
+                    (set-buffer select-buffer-name)
+                    (goto-char (point-min))
+
+                    ;; since selection buffer does not get killed nowadays we
+                    ;; need it to look attractive for the user
+                    (setq buffer-read-only t)
+                    (etags-select-mode tagname)
+
+                    (etags-select-next-tag)
+                    (etags-select-do-goto-tag other-window)
+                    (kill-buffer select-buffer-name))
+                   (t
+                    (set-buffer select-buffer-name)
+                    (goto-char (point-min))
+                    (etags-select-next-tag)
+                    (set-buffer-modified-p nil)
+                    (setq buffer-read-only t)
+                    (if other-window
+                        (switch-to-buffer-other-window select-buffer-name)
+                      (switch-to-buffer select-buffer-name))
+                    (etags-select-mode tagname))))))))
 
 (defun etags-select-do-goto-tag (&optional other-window)
   "Goto the file/line of the tag under the cursor. Do not push tag mark."
