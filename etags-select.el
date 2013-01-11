@@ -203,50 +203,51 @@ buffer."
 
 (defun etags-select-find-matches (tagname find-tag-fn)
   "Find all the matches for a specified tag."
-  (etags-select-save-tag-marks
-      (let* ((buffers-set (etags-select-buffers-set))
-             (matches '())
-             (file-matches '())
-             (last-match-buffer nil)
-             (next-p nil)
-             ;; If some error happens here it will go through since we want
-             ;; user to be aware of it. As the first call to `find-tag-fn'
-             ;; suceeds, we expect successive ones not to fail. With an
-             ;; important exception of the last tag in the loop. So basically
-             ;; *any* error thrown by the subsequent calls to `find-tag-fn' is
-             ;; treated just as a signal that there're no more matching tags.
-             (current-match-buffer (funcall find-tag-fn tagname)))
-        (while current-match-buffer
-          (setq next-p t)
+  (save-excursion
+    (etags-select-save-tag-marks
+        (let* ((buffers-set (etags-select-buffers-set))
+               (matches '())
+               (file-matches '())
+               (last-match-buffer nil)
+               (next-p nil)
+               ;; If some error happens here it will go through since we want
+               ;; user to be aware of it. As the first call to `find-tag-fn'
+               ;; suceeds, we expect successive ones not to fail. With an
+               ;; important exception of the last tag in the loop. So basically
+               ;; *any* error thrown by the subsequent calls to `find-tag-fn' is
+               ;; treated just as a signal that there're no more matching tags.
+               (current-match-buffer (funcall find-tag-fn tagname)))
+          (while current-match-buffer
+            (setq next-p t)
 
-          (with-current-buffer current-match-buffer
-            (let* ((match-point (point))
-                   (match-string (etags-select-copy-line))
-                   (match (cons match-string match-point)))
+            (with-current-buffer current-match-buffer
+              (let* ((match-point (point))
+                     (match-string (etags-select-copy-line))
+                     (match (cons match-string match-point)))
 
-              ;; restore old mark
-              (if (mark t)
-                  (pop-to-mark-command))
+                ;; restore old mark
+                (if (mark t)
+                    (pop-to-mark-command))
 
-              (setq last-match-buffer current-match-buffer)
-              (setq file-matches (cons match file-matches))
+                (setq last-match-buffer current-match-buffer)
+                (setq file-matches (cons match file-matches))
 
-              (setq current-match-buffer
-                    (etags-select-find-next-match tagname find-tag-fn))
+                (setq current-match-buffer
+                      (etags-select-find-next-match tagname find-tag-fn))
 
-              (when (and last-match-buffer
-                         (not (eq last-match-buffer current-match-buffer)))
-                (let ((match-file (buffer-file-name last-match-buffer)))
-                  (setq matches (cons (cons match-file (reverse file-matches))
-                                      matches))
-                  (setq file-matches '()))
+                (when (and last-match-buffer
+                           (not (eq last-match-buffer current-match-buffer)))
+                  (let ((match-file (buffer-file-name last-match-buffer)))
+                    (setq matches (cons (cons match-file (reverse file-matches))
+                                        matches))
+                    (setq file-matches '()))
 
-                ;; kill the buffer if it was open by 'find-tag-fn
-                (when (and etags-select-kill-artifact-buffers
-                           (not (gethash last-match-buffer buffers-set)))
-                  (let ((kill-buffer-query-functions '()))
-                    (kill-buffer last-match-buffer)))))))
-        (reverse matches))))
+                  ;; kill the buffer if it was open by 'find-tag-fn
+                  (when (and etags-select-kill-artifact-buffers
+                             (not (gethash last-match-buffer buffers-set)))
+                    (let ((kill-buffer-query-functions '()))
+                      (kill-buffer last-match-buffer)))))))
+          (reverse matches)))))
 
 (defun etags-select-insert-matches (tagname select-buffer-name matches)
   "Insert matches to tagname in tag-file."
