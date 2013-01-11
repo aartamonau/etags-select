@@ -196,7 +196,7 @@ buffer."
     (buffer-substring-no-properties begin end)))
 
 (defun etags-select-find-next-match (tagname find-tag-fn)
-  "Find next tag match. Return `nil' on failure"
+  "Find next tag match. Return nil on failure"
   (condition-case ex
       (funcall find-tag-fn tagname t)
     ('error
@@ -216,10 +216,10 @@ buffer."
                (last-match-buffer nil)
                (next-p nil)
                ;; If some error happens here it will go through since we want
-               ;; user to be aware of it. As the first call to `find-tag-fn'
+               ;; user to be aware of it. As the first call to FIND-TAG-FN
                ;; suceeds, we expect successive ones not to fail. With an
                ;; important exception of the last tag in the loop. So basically
-               ;; *any* error thrown by the subsequent calls to `find-tag-fn' is
+               ;; *any* error thrown by the subsequent calls to FIND-TAG-FN is
                ;; treated just as a signal that there're no more matching tags.
                (current-match-buffer (funcall find-tag-fn tagname)))
           (while current-match-buffer
