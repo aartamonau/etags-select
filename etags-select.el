@@ -199,7 +199,12 @@ buffer."
   "Find next tag match. Return `nil' on failure"
   (condition-case ex
       (funcall find-tag-fn tagname t)
-    ('error nil)))
+    ('error
+     ;; Since we treat all the errors as "no more matches", we need to give at
+     ;; least some way for user to understand what went wrong if other error
+     ;; happens.
+     (message (error-message-string ex))
+     nil)))
 
 (defun etags-select-find-matches (tagname find-tag-fn)
   "Find all the matches for a specified tag."
